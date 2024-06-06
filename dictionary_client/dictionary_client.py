@@ -29,7 +29,7 @@ from .word import Word
 
 BUF_SIZE = 4096
 DEFAULT_PORT = 2628
-
+DEFAULT_TIMEOUT = 5
 
 class ReadOnlyDescriptor:
     def __set_name__(self, owner, name):
@@ -74,14 +74,15 @@ class DictionaryClient:
     strategies = Strategies()
     databases = Databases()
 
-    def __init__(self, host="localhost", port=DEFAULT_PORT, sock_class=socket.socket):
+    def __init__(self, host="localhost", port=DEFAULT_PORT, sock_class=socket.socket, timeout=DEFAULT_TIMEOUT):
+        self.timeout = timeout
         self.client_name = f"{getpass.getuser()}@{socket.gethostname()}"
         self.client_id_info = f"{self.client_name} {datetime.now().isoformat()}"
         self.sock = sock_class(socket.AF_INET, socket.SOCK_STREAM)
         self.server_info = self._connect(host, port)
 
     def _recv_all(self):
-        rlist, _, _ = select.select([self.sock], [], [], 5)
+        rlist, _, _ = select.select([self.sock], [], [], self.timeout)
         if self.sock not in rlist:
             raise TimeoutError("Client timed out expecting server response.")
         bytes_received = self.sock.recv(BUF_SIZE)
@@ -89,7 +90,7 @@ class DictionaryClient:
         if DictStatusCode.response_complete(status_code):
             return bytes_received
         while not self._response_complete(bytes_received):
-            rlist, _, _ = select.select([self.sock], [], [], 5)
+            rlist, _, _ = select.select([self.sock], [], [], self.timeout)
             if self.sock not in rlist:
                 raise TimeoutError(
                     "Client timed out following preliminary response with status "
